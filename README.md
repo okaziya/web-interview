@@ -7,6 +7,7 @@ NodeJS - if you don't already have it installed, check out [nvm](https://github.
 
 ## Getting started
 Fork the repository (see top-right button on GitHub) and clone the fork to your computer.
+
 ### To start the backend:
 
  - Navigate to the backend folder

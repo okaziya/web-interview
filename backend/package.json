@@ -1,4 +1,5 @@
 {
+  "name": "@sellpy/web-interview-backend",
   "type": "module",
   "scripts": {
     "lint": "eslint --ext .js src",
