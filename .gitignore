@@ -1,3 +1,6 @@
+# IDE
+.idea/
+
 # Frontend
 frontend/node_modules
 
