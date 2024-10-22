@@ -8,7 +8,7 @@ export const TodoList = new EntitySchema({
       primary: true,
       generated: true,
     },
-    name: {
+    title: {
       type: String,
       nullable: false,
     },

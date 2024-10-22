@@ -1,8 +1,13 @@
 import express from 'express'
 import cors from 'cors'
-import { TodoList } from './todo-list.js'
-import { TodoItem } from './todo-item.js'
-import { getAppDataSource } from './data-source.js'
+import {
+  fetchTodoLists,
+  fetchTodoListById,
+  createTodoItem,
+  fetchTodoItemById,
+  updateTodoItem,
+  deleteTodoItem
+} from './todo-service.js'
 
 const app = express()
 
@@ -12,69 +17,59 @@ app.use(express.json())
 app.get('/ping', (req, res) => res.send('Pong!'))
 
 app.get('/api/todo-lists', async (req, res) => {
-  const AppDataSource = await getAppDataSource()
-  const todoItems = await AppDataSource.getRepository(TodoList).find()
-  res.json(todoItems)
+  try {
+    const todoLists = await fetchTodoLists()
+    res.json(todoLists)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
 })
 
 app.get('/api/todo-list/:listId', async (req, res) => {
-  const AppDataSource = await getAppDataSource()
-  const todoList = await AppDataSource.getRepository(TodoList).findOne({
-    where: { id: req.params.listId },
-    relations: ['items'],
-  })
-  res.json(todoList)
+  try {
+    const todoList = await fetchTodoListById(req.params.listId)
+    if (!todoList) return res.status(404).json({ message: 'Todo list not found' })
+    res.json(todoList)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
 })
 
 app.post('/api/todo-list/:listId/item', async (req, res) => {
-  const AppDataSource = await getAppDataSource()
-  const todoList = await AppDataSource.getRepository(TodoList).findOneBy({ id: req.params.listId })
-  const todoItem = AppDataSource.getRepository(TodoItem).create({ ...req.body, list: todoList })
-  await AppDataSource.getRepository(TodoItem).save(todoItem)
-  res.json(todoItem)
+  try {
+    const todoItem = await createTodoItem(req.params.listId, req.body)
+    res.json(todoItem)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+})
+
+app.get('/api/todo-list/:listId/item/:itemId', async (req, res) => {
+  try {
+    const todoItem = await fetchTodoItemById(req.params.listId, req.params.itemId)
+    if (!todoItem) return res.status(404).json({ message: `Todo item not found` })
+    res.json(todoItem)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
 })
 
 app.patch('/api/todo-list/:listId/item/:itemId', async (req, res) => {
-  const AppDataSource = await getAppDataSource()
-  const todoRepository = AppDataSource.getRepository(TodoItem)
-
-  const todoItem = await todoRepository.findOne({
-    where: { id: req.params.itemId, list: { id: req.params.listId } },
-  })
-  if (!todoItem) {
-    return res.status(404).json({ message: `Todo item not found in list ${req.params.listId}` })
-  } else {
-    console.log(
-      `Todo item ${req.params.itemId} found in list ${req.params.listId}: ${JSON.stringify(
-        todoItem
-      )}`
-    )
+  try {
+    const updatedTodoItem = await updateTodoItem(req.params.listId, req.params.itemId, req.body)
+    res.json(updatedTodoItem)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
   }
-  const updatedTodoItem = todoRepository.merge(todoItem, req.body)
-  await todoRepository.save(updatedTodoItem)
-  console.log(`Todo item ${req.params.itemId} in list ${req.params.listId} updated`)
-  res.json(updatedTodoItem)
 })
 
 app.delete('/api/todo-list/:listId/item/:itemId', async (req, res) => {
-  const AppDataSource = await getAppDataSource()
-  const todoRepository = AppDataSource.getRepository(TodoItem)
-
-  const todoItem = await todoRepository.findOne({
-    where: { id: req.params.itemId, list: { id: req.params.listId } },
-  })
-  if (!todoItem) {
-    return res.status(404).json({ message: `Todo item not found in list ${req.params.listId}` })
-  } else {
-    console.log(
-      `Todo item ${req.params.itemId} found in list ${req.params.listId}: ${JSON.stringify(
-        todoItem
-      )}`
-    )
+  try {
+    const deletedTodoItem = await deleteTodoItem(req.params.listId, req.params.itemId)
+    res.json(deletedTodoItem)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
   }
-  await todoRepository.delete(todoItem)
-  console.log(`Todo item ${req.params.itemId} in list ${req.params.listId} deleted`)
-  res.json(todoItem)
 })
 
 export default app

@@ -4,6 +4,15 @@ import { TodoItem } from './todo-item.js'
 
 let dataSource = null
 
+const seedData = async (dataSource) => {
+  const todoListRepository = dataSource.getRepository(TodoList)
+  const todoItemRepository = dataSource.getRepository(TodoItem)
+  const firstList = await todoListRepository.save({ title: 'First List' })
+  await todoItemRepository.save({ itemTitle: 'First todo of first list!', list: firstList })
+  const secondList = await todoListRepository.save({ title: 'Second List' })
+  await todoItemRepository.save({ itemTitle: 'First todo of second list!', list: secondList })
+}
+
 export const getAppDataSource = async () => {
   if (!dataSource) {
     dataSource = new DataSource({
@@ -14,8 +23,7 @@ export const getAppDataSource = async () => {
       logging: true,
     })
     await dataSource.initialize()
-    await dataSource.getRepository(TodoList).save({ name: 'First list' })
-    await dataSource.getRepository(TodoList).save({ name: 'Second list' })
+    await seedData(dataSource)
   }
   return dataSource
 }
