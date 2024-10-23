@@ -3,34 +3,34 @@ import { TextField, Card, CardContent, CardActions, Button, Typography } from '@
 import DeleteIcon from '@mui/icons-material/Delete'
 import AddIcon from '@mui/icons-material/Add'
 import Checkbox from '@mui/material/Checkbox'
-import axios from 'axios'
 import debounce from 'lodash/debounce'
+import {
+  fetchTodoByListId,
+  autosaveTodoItem,
+  addTodoItem,
+  deleteTodoItem,
+  toggleTodoItem,
+} from '../../api/todoService'
 
 export const TodoListForm = ({ todoListId }) => {
   const [todoList, setTodoList] = useState()
 
   useEffect(() => {
-    const fetchTodoByListId = async () => {
+    const loadTodoList = async () => {
       try {
-        const response = await axios.get(`/api/todo-list/${todoListId}`)
-        setTodoList(response.data)
+        const data = await fetchTodoByListId(todoListId)
+        setTodoList(data)
       } catch (error) {
-        console.error('Error fetching todo lists:', error)
+        console.error(error)
       }
     }
-    fetchTodoByListId()
+    loadTodoList()
   }, [todoListId])
 
   const debouncedAutosave = useMemo(
     () =>
       debounce(async (itemId, updatedText) => {
-        try {
-          await axios.patch(`/api/todo-list/${todoListId}/item/${itemId}`, {
-            itemTitle: updatedText,
-          })
-        } catch (error) {
-          console.error('Error autosaving item:', error)
-        }
+        autosaveTodoItem(todoListId, itemId, updatedText).catch((error) => console.error(error))
       }, 1000),
     [todoListId]
   )
@@ -51,8 +51,7 @@ export const TodoListForm = ({ todoListId }) => {
 
   const handleAddItem = async () => {
     try {
-      const response = await axios.post(`/api/todo-list/${todoListId}/item`, { itemTitle: '' })
-      const itemAdded = response.data
+      const itemAdded = await addTodoItem(todoListId)
       setTodoList((prevListState) => {
         return {
           ...prevListState,
@@ -60,14 +59,13 @@ export const TodoListForm = ({ todoListId }) => {
         }
       })
     } catch (error) {
-      console.error('Error adding new todo item:', error)
+      console.error(error)
     }
   }
 
   const handleDeleteItem = async (itemId) => {
     try {
-      await axios.delete(`/api/todo-list/${todoListId}/item/${itemId}`)
-
+      await deleteTodoItem(todoListId, itemId)
       setTodoList((prevListState) => {
         return {
           ...prevListState,
@@ -75,18 +73,14 @@ export const TodoListForm = ({ todoListId }) => {
         }
       })
     } catch (error) {
-      console.error(`Error deleting item ${itemId}:`, error)
+      console.error(error)
     }
   }
 
   const handleToggleDone = async (itemId, currentDoneStatus) => {
     try {
       const updatedDoneStatus = !currentDoneStatus
-
-      await axios.patch(`/api/todo-list/${todoListId}/item/${itemId}`, {
-        completed: updatedDoneStatus,
-      })
-
+      await toggleTodoItem(todoListId, itemId, updatedDoneStatus)
       setTodoList((prevListState) => {
         return {
           ...prevListState,
@@ -96,7 +90,7 @@ export const TodoListForm = ({ todoListId }) => {
         }
       })
     } catch (error) {
-      console.error('Error updating todo item:', error)
+      console.error(error)
     }
   }
 
