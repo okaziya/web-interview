@@ -1,25 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { TextField, Card, CardContent, CardActions, Button, Typography } from '@mui/material'
-import DeleteIcon from '@mui/icons-material/Delete'
+import React, { useState, useEffect } from 'react'
+import { Card, CardContent, CardActions, Button, Typography } from '@mui/material'
+import TodoItem from './TodoItem'
 import AddIcon from '@mui/icons-material/Add'
-import Checkbox from '@mui/material/Checkbox'
-import debounce from 'lodash/debounce'
-import {
-  fetchTodoByListId,
-  autosaveTodoItem,
-  addTodoItem,
-  deleteTodoItem,
-  toggleTodoItem,
-} from '../../api/todoService'
+
+import { fetchTodoByListId, addTodoItem, deleteTodoItem } from '../api/todoService'
 
 export const TodoListForm = ({ todoListId }) => {
-  const [todoList, setTodoList] = useState()
+  const [todoListTitle, setTodoListTitle] = useState()
+  const [todoListItems, setTodoListItems] = useState()
 
   useEffect(() => {
     const loadTodoList = async () => {
       try {
         const data = await fetchTodoByListId(todoListId)
-        setTodoList(data)
+        setTodoListTitle(data.title)
+        setTodoListItems(data.items)
       } catch (error) {
         console.error(error)
       }
@@ -27,37 +22,12 @@ export const TodoListForm = ({ todoListId }) => {
     loadTodoList()
   }, [todoListId])
 
-  const debouncedAutosave = useMemo(
-    () =>
-      debounce(async (itemId, updatedText) => {
-        autosaveTodoItem(todoListId, itemId, updatedText).catch((error) => console.error(error))
-      }, 1000),
-    [todoListId]
-  )
-
-  if (!todoList) return null
-
-  const handleTitleUpdate = (itemId, updatedText) => {
-    setTodoList((prevListState) => {
-      return {
-        ...prevListState,
-        items: prevListState.items.map((item) =>
-          item.id === itemId ? { ...item, itemTitle: updatedText } : item
-        ),
-      }
-    })
-    debouncedAutosave(itemId, updatedText)
-  }
+  if (!todoListItems || !todoListTitle) return null
 
   const handleAddItem = async () => {
     try {
       const itemAdded = await addTodoItem(todoListId)
-      setTodoList((prevListState) => {
-        return {
-          ...prevListState,
-          items: [...prevListState.items, itemAdded],
-        }
-      })
+      setTodoListItems((prevTodoItemsState) => [...prevTodoItemsState, itemAdded])
     } catch (error) {
       console.error(error)
     }
@@ -66,29 +36,10 @@ export const TodoListForm = ({ todoListId }) => {
   const handleDeleteItem = async (itemId) => {
     try {
       await deleteTodoItem(todoListId, itemId)
-      setTodoList((prevListState) => {
-        return {
-          ...prevListState,
-          items: prevListState.items.filter((item) => item.id !== itemId),
-        }
-      })
-    } catch (error) {
-      console.error(error)
-    }
-  }
 
-  const handleToggleDone = async (itemId, currentDoneStatus) => {
-    try {
-      const updatedDoneStatus = !currentDoneStatus
-      await toggleTodoItem(todoListId, itemId, updatedDoneStatus)
-      setTodoList((prevListState) => {
-        return {
-          ...prevListState,
-          items: prevListState.items.map((item) =>
-            item.id === itemId ? { ...item, completed: updatedDoneStatus } : item
-          ),
-        }
-      })
+      setTodoListItems((prevTodoListState) =>
+        prevTodoListState.filter((item) => item.id !== itemId)
+      )
     } catch (error) {
       console.error(error)
     }
@@ -97,41 +48,24 @@ export const TodoListForm = ({ todoListId }) => {
   return (
     <Card sx={{ margin: '0 1rem' }}>
       <CardContent>
-        <Typography component='h2'>{todoList.title}</Typography>
+        <Typography component='h2'>{todoListTitle}</Typography>
         <form style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-          {todoList.items.map((item, index) => (
-            <div key={item.id} style={{ display: 'flex', alignItems: 'center' }}>
-              <Typography sx={{ margin: '8px' }} variant='h6'>
-                {index + 1}
-              </Typography>
-              <TextField
-                sx={{ flexGrow: 1, marginTop: '1rem' }}
-                label='What to do?'
-                value={item.itemTitle}
-                onChange={(event) => handleTitleUpdate(item.id, event.target.value)}
-              />
-              <Button
-                sx={{ margin: '8px' }}
-                size='small'
-                color='secondary'
-                onClick={() => handleDeleteItem(item.id)}
-              >
-                <DeleteIcon />
-              </Button>
-              <Checkbox
-                checked={item.completed}
-                onChange={() => handleToggleDone(item.id, item.completed)}
-                inputProps={{ 'aria-label': 'Mark as done' }}
-              />
-            </div>
+          {todoListItems.map((item, index) => (
+            <TodoItem
+              key={item.id}
+              item={item}
+              index={index}
+              todoListId={todoListId}
+              handleDeleteItem={handleDeleteItem}
+            />
           ))}
-          <CardActions>
-            <Button type='button' color='primary' onClick={handleAddItem}>
-              Add Todo <AddIcon />
-            </Button>
-          </CardActions>
         </form>
       </CardContent>
+      <CardActions>
+        <Button type='button' color='primary' onClick={handleAddItem}>
+          Add Todo <AddIcon />
+        </Button>
+      </CardActions>
     </Card>
   )
 }
