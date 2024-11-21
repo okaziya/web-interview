@@ -1,25 +1,26 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { TextField, Card, CardContent, CardActions, Button, Typography } from '@mui/material'
-import DeleteIcon from '@mui/icons-material/Delete'
+import React, { useState, useEffect } from 'react'
+import { Card, CardContent, CardActions, Button, Typography } from '@mui/material'
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
+import TodoItem from './TodoItem'
 import AddIcon from '@mui/icons-material/Add'
-import Checkbox from '@mui/material/Checkbox'
-import debounce from 'lodash/debounce'
 import {
   fetchTodoByListId,
-  autosaveTodoItem,
   addTodoItem,
   deleteTodoItem,
-  toggleTodoItem,
-} from '../../api/todoService'
+  reorderTodoItems,
+} from '../api/todoService'
 
 export const TodoListForm = ({ todoListId }) => {
-  const [todoList, setTodoList] = useState()
+  const [todoListTitle, setTodoListTitle] = useState()
+  const [todoListItems, setTodoListItems] = useState()
+  const [backupItems, setBackupItems] = useState()
 
   useEffect(() => {
     const loadTodoList = async () => {
       try {
         const data = await fetchTodoByListId(todoListId)
-        setTodoList(data)
+        setTodoListTitle(data.title)
+        setTodoListItems(data.items)
       } catch (error) {
         console.error(error)
       }
@@ -27,37 +28,12 @@ export const TodoListForm = ({ todoListId }) => {
     loadTodoList()
   }, [todoListId])
 
-  const debouncedAutosave = useMemo(
-    () =>
-      debounce(async (itemId, updatedText) => {
-        autosaveTodoItem(todoListId, itemId, updatedText).catch((error) => console.error(error))
-      }, 1000),
-    [todoListId]
-  )
-
-  if (!todoList) return null
-
-  const handleTitleUpdate = (itemId, updatedText) => {
-    setTodoList((prevListState) => {
-      return {
-        ...prevListState,
-        items: prevListState.items.map((item) =>
-          item.id === itemId ? { ...item, itemTitle: updatedText } : item
-        ),
-      }
-    })
-    debouncedAutosave(itemId, updatedText)
-  }
+  if (!todoListItems || !todoListTitle) return null
 
   const handleAddItem = async () => {
     try {
       const itemAdded = await addTodoItem(todoListId)
-      setTodoList((prevListState) => {
-        return {
-          ...prevListState,
-          items: [...prevListState.items, itemAdded],
-        }
-      })
+      setTodoListItems((prevTodoItemsState) => [...prevTodoItemsState, itemAdded])
     } catch (error) {
       console.error(error)
     }
@@ -66,72 +42,83 @@ export const TodoListForm = ({ todoListId }) => {
   const handleDeleteItem = async (itemId) => {
     try {
       await deleteTodoItem(todoListId, itemId)
-      setTodoList((prevListState) => {
-        return {
-          ...prevListState,
-          items: prevListState.items.filter((item) => item.id !== itemId),
-        }
-      })
+
+      setTodoListItems((prevTodoListState) =>
+        prevTodoListState.filter((item) => item.id !== itemId)
+      )
     } catch (error) {
       console.error(error)
     }
   }
 
-  const handleToggleDone = async (itemId, currentDoneStatus) => {
+  const onDragEnd = async (result) => {
+    if (!result.destination) return
+
+    const { source, destination } = result
+
+    // Create a new array with the reordered items
+    const newItems = Array.from(todoListItems)
+    const [reorderedItem] = newItems.splice(source.index, 1)
+    newItems.splice(destination.index, 0, reorderedItem)
+
+    // Optimistically update the local state to give user instant feedback
+    setBackupItems(todoListItems)
+    setTodoListItems(newItems)
+
     try {
-      const updatedDoneStatus = !currentDoneStatus
-      await toggleTodoItem(todoListId, itemId, updatedDoneStatus)
-      setTodoList((prevListState) => {
-        return {
-          ...prevListState,
-          items: prevListState.items.map((item) =>
-            item.id === itemId ? { ...item, completed: updatedDoneStatus } : item
-          ),
-        }
-      })
+      // Call API to persist the new order
+      await reorderTodoItems(
+        todoListId,
+        newItems.map((item) => item.id)
+      )
     } catch (error) {
-      console.error(error)
+      console.error('Error reordering items:', error)
+      // Revert local state if API call fails
+      setTodoListItems(backupItems)
     }
   }
 
   return (
     <Card sx={{ margin: '0 1rem' }}>
       <CardContent>
-        <Typography component='h2'>{todoList.title}</Typography>
-        <form style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-          {todoList.items.map((item, index) => (
-            <div key={item.id} style={{ display: 'flex', alignItems: 'center' }}>
-              <Typography sx={{ margin: '8px' }} variant='h6'>
-                {index + 1}
-              </Typography>
-              <TextField
-                sx={{ flexGrow: 1, marginTop: '1rem' }}
-                label='What to do?'
-                value={item.itemTitle}
-                onChange={(event) => handleTitleUpdate(item.id, event.target.value)}
-              />
-              <Button
-                sx={{ margin: '8px' }}
-                size='small'
-                color='secondary'
-                onClick={() => handleDeleteItem(item.id)}
+        <Typography component='h2'>{todoListTitle}</Typography>
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId='todo-list'>
+            {(provided) => (
+              <form
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+                style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}
               >
-                <DeleteIcon />
-              </Button>
-              <Checkbox
-                checked={item.completed}
-                onChange={() => handleToggleDone(item.id, item.completed)}
-                inputProps={{ 'aria-label': 'Mark as done' }}
-              />
-            </div>
-          ))}
-          <CardActions>
-            <Button type='button' color='primary' onClick={handleAddItem}>
-              Add Todo <AddIcon />
-            </Button>
-          </CardActions>
-        </form>
+                {todoListItems.map((item, index) => (
+                  <Draggable key={item.id} draggableId={item.id.toString()} index={index}>
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        <TodoItem
+                          item={item}
+                          index={index}
+                          todoListId={todoListId}
+                          handleDeleteItem={handleDeleteItem}
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </form>
+            )}
+          </Droppable>
+        </DragDropContext>
       </CardContent>
+      <CardActions>
+        <Button type='button' color='primary' onClick={handleAddItem}>
+          Add Todo <AddIcon />
+        </Button>
+      </CardActions>
     </Card>
   )
 }
